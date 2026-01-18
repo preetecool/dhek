@@ -46,6 +46,7 @@ import type {
 export type KanbanBoardProps = {
   data: KanbanData;
   onTasksChange?: (tasks: Task[]) => void;
+  onTeamMembersChange?: (members: KanbanData["teamMembers"]) => void;
 };
 
 const COLUMN_ICONS: Record<string, React.ReactNode> = {
@@ -252,25 +253,23 @@ type DialogState =
   | { mode: "edit"; task: Task }
   | { mode: "delete"; task: Task };
 
-export function KanbanBoard({ data, onTasksChange }: KanbanBoardProps) {
-  const [tasks, setTasksInternal] = useState<Task[]>(data.tasks);
+export function KanbanBoard({
+  data,
+  onTasksChange,
+  onTeamMembersChange,
+}: KanbanBoardProps) {
+  const tasks = data.tasks;
   const [filters, setFilters] = useState<FilterConfig>(DEFAULT_FILTERS);
 
   const setTasks = useCallback(
     (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
-      setTasksInternal((prev) => {
-        const updated =
-          typeof newTasks === "function" ? newTasks(prev) : newTasks;
-        onTasksChange?.(updated);
-        return updated;
-      });
+      const updated =
+        typeof newTasks === "function" ? newTasks(tasks) : newTasks;
+      // Defer to avoid setState during render
+      queueMicrotask(() => onTasksChange?.(updated));
     },
-    [onTasksChange]
+    [tasks, onTasksChange]
   );
-
-  useEffect(() => {
-    setTasksInternal(data.tasks);
-  }, [data.tasks]);
 
   const togglePriority = useCallback((priority: Priority, checked: boolean) => {
     setFilters((prev) => ({
@@ -336,6 +335,13 @@ export function KanbanBoard({ data, onTasksChange }: KanbanBoardProps) {
       closeDialog();
     },
     [setTasks, closeDialog]
+  );
+
+  const handleCreateAssignee = useCallback(
+    (assignee: KanbanData["teamMembers"][number]) => {
+      onTeamMembersChange?.([...data.teamMembers, assignee]);
+    },
+    [data.teamMembers, onTeamMembersChange]
   );
 
   return (
@@ -412,8 +418,10 @@ export function KanbanBoard({ data, onTasksChange }: KanbanBoardProps) {
         }
         columns={data.columns}
         groupBy={groupBy}
+        key={dialogState.mode === "edit" ? dialogState.task.id : "create"}
         mode={dialogState.mode === "create" ? "create" : "edit"}
         onClose={closeDialog}
+        onCreateAssignee={handleCreateAssignee}
         onDelete={
           dialogState.mode === "edit"
             ? () => handleDeleteTask(dialogState.task.id)

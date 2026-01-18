@@ -147,6 +147,7 @@ export type TaskDialogProps = {
     existingId?: string
   ) => void;
   onDelete?: () => void;
+  onCreateAssignee?: (assignee: Assignee) => void;
 };
 
 export function TaskDialog({
@@ -161,20 +162,28 @@ export function TaskDialog({
   onClose,
   onSave,
   onDelete,
+  onCreateAssignee,
 }: TaskDialogProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showCreateAssigneeDialog, setShowCreateAssigneeDialog] =
+    useState(false);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task?.subtasks ?? []);
   const [dueDate, setDueDate] = useState(
     task?.dueDate ? task.dueDate.split("T")[0] : ""
   );
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [localAssignees, setLocalAssignees] = useState<Assignee[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<Assignee[]>(
+    task?.assignees ?? []
+  );
+  const [assigneeComboboxOpen, setAssigneeComboboxOpen] = useState(false);
+  const allAssignees = [...assignees, ...localAssignees];
 
   const defaultColumnId = columns[0]?.id ?? "";
   const defaultPriority = task?.priority ?? "medium";
   const defaultSelectedColumnId = task?.columnId ?? columnId ?? defaultColumnId;
   const defaultTags = task?.tags ?? [];
-  const defaultAssignees = task?.assignees ?? [];
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -204,7 +213,7 @@ export function TaskDialog({
         priority,
         columnId: taskColumnId,
         tags,
-        assignees: defaultAssignees,
+        assignees: selectedAssignees,
         subtasks: subtasks.filter((st) => st.title.trim()),
         dueDate: dueDate || undefined,
       };
@@ -214,12 +223,36 @@ export function TaskDialog({
     },
     [
       defaultSelectedColumnId,
-      defaultAssignees,
+      selectedAssignees,
       subtasks,
       dueDate,
       onSave,
       taskId,
     ]
+  );
+
+  const handleCreateAssignee = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      const name = (formData.get("assigneeName") as string)?.trim();
+
+      if (!name) return;
+
+      const newAssignee: Assignee = {
+        id: `assignee-${crypto.randomUUID()}`,
+        name,
+      };
+
+      // Only add to local state if parent doesn't handle persistence
+      if (!onCreateAssignee) {
+        setLocalAssignees((prev) => [...prev, newAssignee]);
+      }
+      setSelectedAssignees((prev) => [...prev, newAssignee]);
+      onCreateAssignee?.(newAssignee);
+      setShowCreateAssigneeDialog(false);
+    },
+    [onCreateAssignee]
   );
 
   const addSubtask = useCallback(() => {
@@ -393,10 +426,10 @@ export function TaskDialog({
                 name="priority"
               >
                 <SelectTrigger
-                  className="inline-flex items-center gap-2 whitespace-nowrap [&_[data-slot=select-value]]:flex [&_[data-slot=select-value]]:items-center [&_[data-slot=select-value]]:gap-2"
+                  className="!min-w-0 inline-flex items-center gap-2 whitespace-nowrap [&_[data-slot=select-value]]:flex [&_[data-slot=select-value]]:items-center [&_[data-slot=select-value]]:gap-2"
                   render={
                     <Button
-                      className="shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
+                      className="!min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
                       size="sm"
                       variant="outline"
                     />
@@ -426,7 +459,7 @@ export function TaskDialog({
                     sideOffset={6}
                   >
                     <SelectPopup
-                      className="w-[200px] shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)] shadow-[var(--shadow-border-stack)]"
+                      className="w-[200px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
                       data-slot="select-popup"
                     >
                       <SelectSpacer />
@@ -461,10 +494,10 @@ export function TaskDialog({
                   name="columnId"
                 >
                   <SelectTrigger
-                    className="inline-flex items-center gap-2 whitespace-nowrap [&_[data-slot=select-value]]:flex [&_[data-slot=select-value]]:items-center [&_[data-slot=select-value]]:gap-2"
+                    className="!min-w-0 inline-flex items-center gap-2 whitespace-nowrap [&_[data-slot=select-value]]:flex [&_[data-slot=select-value]]:items-center [&_[data-slot=select-value]]:gap-2"
                     render={
                       <Button
-                        className="shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
+                        className="!min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
                         size="sm"
                         variant="outline"
                       />
@@ -492,7 +525,7 @@ export function TaskDialog({
                       sideOffset={6}
                     >
                       <SelectPopup
-                        className="w-[200px] shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)] shadow-[var(--shadow-border-stack)]"
+                        className="w-[200px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
                         data-slot="select-popup"
                       >
                         <SelectSpacer />
@@ -524,10 +557,10 @@ export function TaskDialog({
                 name="tags"
               >
                 <SelectTrigger
-                  className="inline-flex items-center gap-2 whitespace-nowrap"
+                  className="!min-w-0 inline-flex items-center gap-2 whitespace-nowrap"
                   render={
                     <Button
-                      className="shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
+                      className="!min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
                       size="sm"
                       variant="outline"
                     />
@@ -560,11 +593,10 @@ export function TaskDialog({
                   <SelectPositioner
                     align="start"
                     alignItemWithTrigger={false}
-                    className="min-w-[130px]"
                     sideOffset={6}
                   >
                     <SelectPopup
-                      className="w-[200px] shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)] shadow-[var(--shadow-border-stack)]"
+                      className="min-w-[150px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
                       data-slot="select-popup"
                     >
                       <SelectSpacer />
@@ -588,10 +620,13 @@ export function TaskDialog({
               </Select>
 
               <Combobox<Assignee, true>
-                defaultValue={defaultAssignees}
-                items={assignees}
+                items={allAssignees}
                 multiple
                 name="assignees"
+                onOpenChange={setAssigneeComboboxOpen}
+                onValueChange={setSelectedAssignees}
+                open={assigneeComboboxOpen}
+                value={selectedAssignees}
               >
                 <ComboboxPrimitive.Trigger
                   render={
@@ -615,12 +650,13 @@ export function TaskDialog({
                 </ComboboxPrimitive.Trigger>
                 <ComboboxPortal>
                   <ComboboxPositioner side="bottom" sideOffset={6}>
-                    <ComboboxPopup className="w-[200px] min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)] shadow-[var(--shadow-border-stack)]">
+                    <ComboboxPopup className="min-w-[200px]">
                       <ComboboxInput
-                        className="mb-1 min-h-8 w-full rounded-none border-0 border-b-[0.5px] border-b-[oklch(from_var(--border)_l_c_h_/_0.8)] bg-transparent pr-2.5 pl-3 text-xs focus:border-b-[oklch(from_var(--border)_l_c_h_/_0.8)] focus:shadow-none focus:outline-none"
+                        className="!rounded-none !bg-transparent !shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)] focus:!shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]"
                         placeholder="Search assignees..."
                       />
                       <ComboboxEmpty>No users found</ComboboxEmpty>
+                      <div className="h-1 w-full shrink-0" />
                       <ComboboxList>
                         {(assignee: Assignee) => (
                           <ComboboxItem
@@ -632,6 +668,21 @@ export function TaskDialog({
                           </ComboboxItem>
                         )}
                       </ComboboxList>
+                      <div className="h-1 w-full shrink-0" />
+                      <div className="px-1 shadow-[inset_0_1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]">
+                        <div className="h-1 w-full shrink-0" />
+                        <button
+                          className="flex w-full cursor-pointer items-center gap-2 rounded-[calc(var(--radius)-4px)] border-none bg-transparent px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-[var(--accent)] hover:text-foreground"
+                          onClick={() => {
+                            setAssigneeComboboxOpen(false);
+                            setShowCreateAssigneeDialog(true);
+                          }}
+                          type="button"
+                        >
+                          <Plus size={14} />
+                          <span>Add assignee</span>
+                        </button>
+                      </div>
                     </ComboboxPopup>
                   </ComboboxPositioner>
                 </ComboboxPortal>
@@ -678,7 +729,7 @@ export function TaskDialog({
             <div className="-mx-5 mt-6 flex items-center justify-between gap-2 border-t-[0.5px] border-t-[oklch(from_var(--border)_l_c_h_/_0.4)] px-5 pt-4">
               {mode === "edit" && (
                 <Button
-                  className="text-muted-foreground shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)] hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  className="hover:!border-destructive hover:!bg-destructive hover:!text-destructive-foreground text-muted-foreground shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
                   onClick={() => setShowDeleteDialog(true)}
                   size="sm"
                   type="button"
@@ -717,6 +768,41 @@ export function TaskDialog({
             onOpenChange={setShowDeleteDialog}
             open={showDeleteDialog}
           />
+
+          <Dialog
+            onOpenChange={setShowCreateAssigneeDialog}
+            open={showCreateAssigneeDialog}
+          >
+            <DialogPortal>
+              <DialogOverlay className="z-[200]" />
+              <DialogPopup className="z-[201] max-w-[400px]">
+                <h2 className="mb-1 font-semibold text-lg">Add new assignee</h2>
+                <p className="mb-4 text-muted-foreground text-sm">
+                  Create a new team member to assign tasks to.
+                </p>
+                <form onSubmit={handleCreateAssignee}>
+                  <Input
+                    autoFocus
+                    name="assigneeName"
+                    placeholder="Enter name..."
+                  />
+                  <div className="mt-4 flex justify-end gap-2">
+                    <Button
+                      onClick={() => setShowCreateAssigneeDialog(false)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="sm" type="submit">
+                      Create
+                    </Button>
+                  </div>
+                </form>
+              </DialogPopup>
+            </DialogPortal>
+          </Dialog>
         </DialogPopup>
       </DialogPortal>
     </Dialog>

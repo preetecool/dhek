@@ -40,7 +40,7 @@ function PopoverPositioner({ className, ...props }: Popover.Positioner.Props) {
   return (
     <Popover.Positioner
       className={cn(
-        "z-50 h-[var(--positioner-height)] w-[var(--positioner-width)] max-w-[var(--available-width)] transition-[top,left,right,bottom,transform] duration-200 ease-out data-[instant]:transition-none",
+        "z-50 h-[var(--positioner-height)] w-[var(--positioner-width)] max-w-[var(--available-width)] transition-[top,left,right,bottom,transform] duration-200 ease-out will-change-transform data-[instant]:transition-none",
         className
       )}
       data-slot="popover-positioner"
@@ -70,7 +70,7 @@ function PopoverPopup({
       <Popover.Positioner
         align={align}
         alignOffset={alignOffset}
-        className="z-[250] h-[var(--positioner-height)] w-[var(--positioner-width)] max-w-[var(--available-width)] transition-[top,left,right,bottom,transform] duration-200 ease-out data-[instant]:transition-none"
+        className="z-[250] h-[var(--positioner-height)] w-[var(--positioner-width)] max-w-[var(--available-width)] transition-[top,left,right,bottom,transform] duration-200 ease-out will-change-transform data-[instant]:transition-none"
         data-slot="popover-positioner"
         side={side}
         sideOffset={sideOffset}

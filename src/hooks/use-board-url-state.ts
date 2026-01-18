@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { Column, KanbanData, Task } from "@/components/kanban-board/types";
 
 const DEFAULT_COLUMNS: Column[] = [
@@ -17,30 +17,22 @@ const DEFAULT_DATA: KanbanData = {
 };
 
 function encodeBoard(data: KanbanData): string {
-  const json = JSON.stringify(data);
-  if (typeof window === "undefined") {
-    return Buffer.from(json).toString("base64");
-  }
   return btoa(
-    encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) =>
-      String.fromCharCode(Number.parseInt(p1, 16))
+    encodeURIComponent(JSON.stringify(data)).replace(
+      /%([0-9A-F]{2})/g,
+      (_, p1) => String.fromCharCode(Number.parseInt(p1, 16))
     )
   );
 }
 
 function decodeBoard(encoded: string): KanbanData | null {
   try {
-    let json: string;
-    if (typeof window === "undefined") {
-      json = Buffer.from(encoded, "base64").toString("utf-8");
-    } else {
-      json = decodeURIComponent(
-        atob(encoded)
-          .split("")
-          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-          .join("")
-      );
-    }
+    const json = decodeURIComponent(
+      atob(encoded)
+        .split("")
+        .map((c) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
+        .join("")
+    );
     const parsed = JSON.parse(json);
     if (
       parsed &&
@@ -61,81 +53,100 @@ function decodeBoard(encoded: string): KanbanData | null {
 }
 
 function getBoardFromUrl(): KanbanData {
-  if (typeof window === "undefined") {
-    return DEFAULT_DATA;
-  }
   const params = new URLSearchParams(window.location.search);
   const boardParam = params.get("board");
-  if (!boardParam) {
-    return DEFAULT_DATA;
-  }
-  const decoded = decodeBoard(boardParam);
-  return decoded ?? DEFAULT_DATA;
+  if (!boardParam) return DEFAULT_DATA;
+  return decodeBoard(boardParam) ?? DEFAULT_DATA;
 }
 
 function updateUrlWithBoard(data: KanbanData): void {
-  if (typeof window === "undefined") {
-    return;
-  }
   const encoded = encodeBoard(data);
   const url = new URL(window.location.href);
   url.searchParams.set("board", encoded);
   window.history.replaceState({}, "", url.toString());
 }
 
+let boardData: KanbanData = DEFAULT_DATA;
+const listeners = new Set<() => void>();
+
+function subscribe(callback: () => void) {
+  listeners.add(callback);
+  return () => listeners.delete(callback);
+}
+
+function getSnapshot() {
+  return boardData;
+}
+
+function getServerSnapshot() {
+  return DEFAULT_DATA;
+}
+
+function setBoardData(newData: KanbanData) {
+  boardData = newData;
+  updateUrlWithBoard(newData);
+  for (const listener of listeners) listener();
+}
+
+let initialized = false;
+function initializeFromUrl() {
+  if (!initialized && typeof window !== "undefined") {
+    initialized = true;
+    boardData = getBoardFromUrl();
+  }
+}
+
 export function useBoardUrlState() {
-  const [isClient, setIsClient] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [data, setDataInternal] = useState<KanbanData>(DEFAULT_DATA);
+  const initRef = useRef(false);
+  if (!initRef.current && typeof window !== "undefined") {
+    initRef.current = true;
+    initializeFromUrl();
+  }
 
-  // Load initial data from URL on mount
-  useEffect(() => {
-    setIsClient(true);
-    const initialData = getBoardFromUrl();
-    setDataInternal(initialData);
-    setIsInitialized(true);
-  }, []);
-
-  // Update URL when data changes (but not on initial load)
-  useEffect(() => {
-    if (isInitialized) {
-      updateUrlWithBoard(data);
-    }
-  }, [data, isInitialized]);
+  const data = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const setData = useCallback(
     (newData: KanbanData | ((prev: KanbanData) => KanbanData)) => {
-      setDataInternal((prev) => {
-        const updated = typeof newData === "function" ? newData(prev) : newData;
-        return updated;
-      });
+      const updated =
+        typeof newData === "function" ? newData(boardData) : newData;
+      setBoardData(updated);
     },
     []
   );
 
   const setTasks = useCallback(
     (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
-      setDataInternal((prev) => {
-        const tasks =
-          typeof newTasks === "function" ? newTasks(prev.tasks) : newTasks;
-        return { ...prev, tasks };
-      });
+      const tasks =
+        typeof newTasks === "function" ? newTasks(boardData.tasks) : newTasks;
+      setBoardData({ ...boardData, tasks });
     },
     []
   );
 
-  const shareUrl = useMemo(() => {
-    if (!isClient) {
-      return "";
-    }
-    return window.location.href;
-  }, [isClient, data]);
+  const setTeamMembers = useCallback(
+    (
+      newMembers:
+        | KanbanData["teamMembers"]
+        | ((prev: KanbanData["teamMembers"]) => KanbanData["teamMembers"])
+    ) => {
+      const teamMembers =
+        typeof newMembers === "function"
+          ? newMembers(boardData.teamMembers)
+          : newMembers;
+      setBoardData({ ...boardData, teamMembers });
+    },
+    []
+  );
+
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const isLoading = typeof window === "undefined";
 
   return {
     data,
     setData,
     setTasks,
-    isLoading: !isClient,
+    setTeamMembers,
+    isLoading,
     shareUrl,
   };
 }

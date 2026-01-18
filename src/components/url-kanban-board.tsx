@@ -10,7 +10,8 @@ import { AnchoredToastProvider, showCopiedToast } from "@/components/ui/toast";
 import { useBoardUrlState } from "@/hooks/use-board-url-state";
 
 export function UrlKanbanBoard() {
-  const { data, setTasks, isLoading, shareUrl } = useBoardUrlState();
+  const { data, setTasks, setTeamMembers, isLoading, shareUrl } =
+    useBoardUrlState();
   const shareButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleTasksChange = useCallback(
@@ -18,6 +19,13 @@ export function UrlKanbanBoard() {
       setTasks(tasks);
     },
     [setTasks]
+  );
+
+  const handleTeamMembersChange = useCallback(
+    (members: Task["assignees"]) => {
+      setTeamMembers(members ?? []);
+    },
+    [setTeamMembers]
   );
 
   const handleShare = useCallback(async () => {
@@ -66,7 +74,11 @@ export function UrlKanbanBoard() {
           </div>
         </header>
         <main className="flex min-h-0 flex-1 flex-col" id="main-content">
-          <KanbanBoard data={data} onTasksChange={handleTasksChange} />
+          <KanbanBoard
+            data={data}
+            onTasksChange={handleTasksChange}
+            onTeamMembersChange={handleTeamMembersChange}
+          />
         </main>
       </div>
     </AnchoredToastProvider>

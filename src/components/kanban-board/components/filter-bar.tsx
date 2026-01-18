@@ -21,13 +21,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import {
-  capitalize,
-  GROUP_BY_ITEMS,
-  PRIORITY_ITEMS,
-  TAG_ITEMS,
-} from "../project";
-import type { FilterConfig, GroupByField, Priority } from "../types";
+import { capitalize, GROUP_BY_ITEMS, PRIORITY_ITEMS } from "../project";
+import type { FilterConfig, GroupByField, Priority, Tag } from "../types";
 
 function CheckIcon() {
   return <Check size={12} />;
@@ -36,6 +31,7 @@ function CheckIcon() {
 export type FilterBarProps = {
   className?: string;
   filters: FilterConfig;
+  tags: Tag[];
   groupBy: GroupByField;
   onTogglePriority: (priority: Priority, checked: boolean) => void;
   onToggleTag: (tag: string, checked: boolean) => void;
@@ -45,6 +41,7 @@ export type FilterBarProps = {
 export function FilterBar({
   className,
   filters,
+  tags,
   groupBy,
   onTogglePriority,
   onToggleTag,
@@ -116,20 +113,30 @@ export function FilterBar({
 
                 <DropdownMenuGroup>
                   <DropdownMenuGroupLabel>Tags</DropdownMenuGroupLabel>
-                  {TAG_ITEMS.map((item) => (
-                    <DropdownMenuCheckboxItem
-                      checked={tagSet.has(item.value)}
-                      key={item.value}
-                      onCheckedChange={(checked) =>
-                        onToggleTag(item.value, checked)
-                      }
-                    >
-                      <span>{item.label}</span>
-                      <DropdownMenuCheckboxItemIndicator>
-                        <CheckIcon />
-                      </DropdownMenuCheckboxItemIndicator>
-                    </DropdownMenuCheckboxItem>
-                  ))}
+                  {tags.length === 0 ? (
+                    <div className="px-2 py-1.5 text-muted-foreground text-sm">
+                      No tags created yet
+                    </div>
+                  ) : (
+                    tags.map((tag) => (
+                      <DropdownMenuCheckboxItem
+                        checked={tagSet.has(tag.id)}
+                        key={tag.id}
+                        onCheckedChange={(checked) =>
+                          onToggleTag(tag.id, checked)
+                        }
+                      >
+                        <span
+                          className="mr-2 h-2 w-2 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        <span>{tag.name}</span>
+                        <DropdownMenuCheckboxItemIndicator>
+                          <CheckIcon />
+                        </DropdownMenuCheckboxItemIndicator>
+                      </DropdownMenuCheckboxItem>
+                    ))
+                  )}
                 </DropdownMenuGroup>
 
                 <DropdownMenuSpacer />
@@ -188,6 +195,7 @@ export function FilterBar({
 export type ActiveFiltersProps = {
   className?: string;
   filters: FilterConfig;
+  tags: Tag[];
   onRemovePriority: (priority: Priority) => void;
   onRemoveTag: (tag: string) => void;
 };
@@ -195,11 +203,13 @@ export type ActiveFiltersProps = {
 export function ActiveFilters({
   className,
   filters,
+  tags,
   onRemovePriority,
   onRemoveTag,
 }: ActiveFiltersProps) {
   const hasActiveFilters =
     filters.priority.length > 0 || filters.tags.length > 0;
+  const tagMap = new Map(tags.map((t) => [t.id, t]));
 
   if (!hasActiveFilters) {
     return null;
@@ -223,23 +233,31 @@ export function ActiveFilters({
           </button>
         </Badge>
       ))}
-      {filters.tags.map((tag) => (
-        <Badge
-          className="flex items-center gap-1"
-          key={tag}
-          variant="secondary"
-        >
-          {capitalize(tag)}
-          <button
-            aria-label={`Remove ${capitalize(tag)} tag filter`}
-            className="flex cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 opacity-70 transition-opacity duration-150 hover:opacity-100"
-            onClick={() => onRemoveTag(tag)}
-            type="button"
+      {filters.tags.map((tagId) => {
+        const tag = tagMap.get(tagId);
+        if (!tag) return null;
+        return (
+          <Badge
+            className="flex items-center gap-1"
+            key={tagId}
+            variant="secondary"
           >
-            <X aria-hidden="true" size={12} />
-          </button>
-        </Badge>
-      ))}
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: tag.color }}
+            />
+            {tag.name}
+            <button
+              aria-label={`Remove ${tag.name} tag filter`}
+              className="flex cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 opacity-70 transition-opacity duration-150 hover:opacity-100"
+              onClick={() => onRemoveTag(tagId)}
+              type="button"
+            >
+              <X aria-hidden="true" size={12} />
+            </button>
+          </Badge>
+        );
+      })}
     </div>
   );
 }

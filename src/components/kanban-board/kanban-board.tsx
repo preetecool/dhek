@@ -7,7 +7,6 @@ import {
   CircleDashed,
   CircleDot,
   ListTodo,
-  MessageCircleMore,
   Plus,
   User,
 } from "lucide-react";
@@ -34,12 +33,13 @@ import {
 } from "./components/kanban";
 import { PriorityIcon } from "./components/priority-icon";
 import { TaskDialog } from "./components/task-dialog";
-import { capitalize, TAG_COLORS, type Tag } from "./project";
+import { capitalize } from "./project";
 import type {
   FilterConfig,
   GroupByField,
   KanbanData,
   Priority,
+  Tag,
   Task,
 } from "./types";
 
@@ -47,6 +47,7 @@ export type KanbanBoardProps = {
   data: KanbanData;
   onTasksChange?: (tasks: Task[]) => void;
   onTeamMembersChange?: (members: KanbanData["teamMembers"]) => void;
+  onTagsChange?: (tags: KanbanData["tags"]) => void;
 };
 
 const COLUMN_ICONS: Record<string, React.ReactNode> = {
@@ -81,9 +82,11 @@ function useCurrentDate() {
 
 function TaskCardContent({
   task,
+  tags,
   onEdit,
 }: {
   task: Task;
+  tags: Tag[];
   onEdit?: (task: Task) => void;
 }) {
   const now = useCurrentDate();
@@ -91,6 +94,7 @@ function TaskCardContent({
   const completedSubtasks =
     task.subtasks?.filter((st) => st.completed).length ?? 0;
   const daysLeft = getDaysLeft(task.dueDate, now);
+  const tagMap = new Map(tags.map((t) => [t.id, t]));
 
   const renderAssignees = () => {
     if (!task.assignees) {
@@ -160,15 +164,19 @@ function TaskCardContent({
           <PriorityIcon priority={task.priority} />
           {task.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {task.tags.map((tag) => (
-                <Badge key={tag} size="sm" variant="outline">
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: TAG_COLORS[tag as Tag] }}
-                  />
-                  {capitalize(tag)}
-                </Badge>
-              ))}
+              {task.tags.map((tagId) => {
+                const tag = tagMap.get(tagId);
+                if (!tag) return null;
+                return (
+                  <Badge key={tagId} size="sm" variant="outline">
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    {capitalize(tag.name)}
+                  </Badge>
+                );
+              })}
             </div>
           )}
         </div>
@@ -183,7 +191,7 @@ function TaskCardContent({
         <CardFooter className="flex items-center justify-between gap-2 p-0">
           <div className="flex items-center gap-2">
             {renderAssignees()}
-            <Button
+            {/* <Button
               aria-label="Comments"
               className={cn(
                 "flex h-auto items-center justify-center gap-1 px-2 py-1",
@@ -195,7 +203,7 @@ function TaskCardContent({
               variant="ghost"
             >
               <MessageCircleMore aria-hidden="true" size={12} />
-            </Button>
+            </Button> */}
             {subtaskCount > 0 && (
               <Button
                 aria-label={`${completedSubtasks} of ${subtaskCount} subtasks completed`}
@@ -257,6 +265,7 @@ export function KanbanBoard({
   data,
   onTasksChange,
   onTeamMembersChange,
+  onTagsChange,
 }: KanbanBoardProps) {
   const tasks = data.tasks;
   const [filters, setFilters] = useState<FilterConfig>(DEFAULT_FILTERS);
@@ -344,6 +353,13 @@ export function KanbanBoard({
     [data.teamMembers, onTeamMembersChange]
   );
 
+  const handleCreateTag = useCallback(
+    (tag: Tag) => {
+      onTagsChange?.([...data.tags, tag]);
+    },
+    [data.tags, onTagsChange]
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Toolbar */}
@@ -353,6 +369,7 @@ export function KanbanBoard({
         onGroupByChange={setGroupBy}
         onTogglePriority={togglePriority}
         onToggleTag={toggleTag}
+        tags={data.tags}
       />
 
       {activeFilterCount > 0 && (
@@ -361,6 +378,7 @@ export function KanbanBoard({
             filters={filters}
             onRemovePriority={(p) => togglePriority(p, false)}
             onRemoveTag={(t) => toggleTag(t, false)}
+            tags={data.tags}
           />
         </div>
       )}
@@ -374,7 +392,7 @@ export function KanbanBoard({
         onEditItem={openEdit}
         renderOverlay={(task) => (
           <KanbanCard id={task.id} isOverlay item={task}>
-            <TaskCardContent task={task} />
+            <TaskCardContent tags={data.tags} task={task} />
           </KanbanCard>
         )}
       >
@@ -402,7 +420,11 @@ export function KanbanBoard({
             <KanbanCardList<Task> id={column.id}>
               {(task) => (
                 <KanbanCard id={task.id} item={task} key={task.id}>
-                  <TaskCardContent onEdit={openEdit} task={task} />
+                  <TaskCardContent
+                    onEdit={openEdit}
+                    tags={data.tags}
+                    task={task}
+                  />
                 </KanbanCard>
               )}
             </KanbanCardList>
@@ -422,6 +444,7 @@ export function KanbanBoard({
         mode={dialogState.mode === "create" ? "create" : "edit"}
         onClose={closeDialog}
         onCreateAssignee={handleCreateAssignee}
+        onCreateTag={handleCreateTag}
         onDelete={
           dialogState.mode === "edit"
             ? () => handleDeleteTask(dialogState.task.id)
@@ -429,6 +452,7 @@ export function KanbanBoard({
         }
         onSave={handleSaveTask}
         open={dialogState.mode === "create" || dialogState.mode === "edit"}
+        tags={data.tags}
         task={dialogState.mode === "edit" ? dialogState.task : undefined}
         taskId={dialogState.mode === "edit" ? dialogState.task.id : undefined}
       />

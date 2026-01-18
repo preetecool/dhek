@@ -59,9 +59,7 @@ import {
   formatDateString,
   PRIORITY_ITEMS,
   parseDateString,
-  TAG_COLORS,
-  TAG_ITEMS,
-  type Tag,
+  TAG_COLOR_OPTIONS,
 } from "../project";
 import type {
   Assignee,
@@ -69,6 +67,7 @@ import type {
   GroupByField,
   Priority,
   Subtask,
+  Tag,
   Task,
 } from "../types";
 import { DeleteDialog } from "./delete-dialog";
@@ -114,11 +113,11 @@ function PriorityBars({ count }: { count: number }) {
   );
 }
 
-function TagDot({ tag }: { tag: Tag }) {
+function TagDot({ color }: { color: string }) {
   return (
     <span
       className="h-2 w-2 shrink-0 rounded-full"
-      style={{ backgroundColor: TAG_COLORS[tag] }}
+      style={{ backgroundColor: color }}
     />
   );
 }
@@ -139,6 +138,7 @@ export type TaskDialogProps = {
   taskId?: string;
   columnId?: string;
   assignees: Assignee[];
+  tags: Tag[];
   columns: Column[];
   groupBy: GroupByField;
   onClose: () => void;
@@ -148,6 +148,7 @@ export type TaskDialogProps = {
   ) => void;
   onDelete?: () => void;
   onCreateAssignee?: (assignee: Assignee) => void;
+  onCreateTag?: (tag: Tag) => void;
 };
 
 export function TaskDialog({
@@ -157,16 +158,19 @@ export function TaskDialog({
   taskId,
   columnId,
   assignees,
+  tags: availableTags,
   columns,
   groupBy,
   onClose,
   onSave,
   onDelete,
   onCreateAssignee,
+  onCreateTag,
 }: TaskDialogProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showCreateAssigneeDialog, setShowCreateAssigneeDialog] =
     useState(false);
+  const [showCreateTagDialog, setShowCreateTagDialog] = useState(false);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task?.subtasks ?? []);
   const [dueDate, setDueDate] = useState(
     task?.dueDate ? task.dueDate.split("T")[0] : ""
@@ -180,10 +184,18 @@ export function TaskDialog({
   const [assigneeComboboxOpen, setAssigneeComboboxOpen] = useState(false);
   const allAssignees = [...assignees, ...localAssignees];
 
+  const [localTags, setLocalTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>(() => {
+    const taskTagIds = task?.tags ?? [];
+    return availableTags.filter((t) => taskTagIds.includes(t.id));
+  });
+  const [tagComboboxOpen, setTagComboboxOpen] = useState(false);
+  const [newTagColor, setNewTagColor] = useState(TAG_COLOR_OPTIONS[0].value);
+  const allTags = [...availableTags, ...localTags];
+
   const defaultColumnId = columns[0]?.id ?? "";
   const defaultPriority = task?.priority ?? "medium";
   const defaultSelectedColumnId = task?.columnId ?? columnId ?? defaultColumnId;
-  const defaultTags = task?.tags ?? [];
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -204,15 +216,13 @@ export function TaskDialog({
       const priority = (formData.get("priority") as Priority) ?? "medium";
       const taskColumnId =
         (formData.get("columnId") as string) ?? defaultSelectedColumnId;
-      const tagsRaw = formData.getAll("tags") as string[];
-      const tags = tagsRaw.length > 0 ? tagsRaw : [];
 
       const taskData: Omit<Task, "id" | "createdAt"> = {
         title,
         description,
         priority,
         columnId: taskColumnId,
-        tags,
+        tags: selectedTags.map((t) => t.id),
         assignees: selectedAssignees,
         subtasks: subtasks.filter((st) => st.title.trim()),
         dueDate: dueDate || undefined,
@@ -224,6 +234,7 @@ export function TaskDialog({
     [
       defaultSelectedColumnId,
       selectedAssignees,
+      selectedTags,
       subtasks,
       dueDate,
       onSave,
@@ -253,6 +264,32 @@ export function TaskDialog({
       setShowCreateAssigneeDialog(false);
     },
     [onCreateAssignee]
+  );
+
+  const handleCreateTag = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      const name = (formData.get("tagName") as string)?.trim();
+
+      if (!name) return;
+
+      const newTag: Tag = {
+        id: `tag-${crypto.randomUUID()}`,
+        name,
+        color: newTagColor,
+      };
+
+      // Only add to local state if parent doesn't handle persistence
+      if (!onCreateTag) {
+        setLocalTags((prev) => [...prev, newTag]);
+      }
+      setSelectedTags((prev) => [...prev, newTag]);
+      onCreateTag?.(newTag);
+      setShowCreateTagDialog(false);
+      setNewTagColor(TAG_COLOR_OPTIONS[0].value);
+    },
+    [onCreateTag, newTagColor]
   );
 
   const addSubtask = useCallback(() => {
@@ -551,16 +588,19 @@ export function TaskDialog({
                 </Select>
               )}
 
-              <Select<string, true>
-                defaultValue={defaultTags}
+              <Combobox<Tag, true>
+                items={allTags}
                 multiple
                 name="tags"
+                onOpenChange={setTagComboboxOpen}
+                onValueChange={setSelectedTags}
+                open={tagComboboxOpen}
+                value={selectedTags}
               >
-                <SelectTrigger
-                  className="!min-w-0 inline-flex items-center gap-2 whitespace-nowrap"
+                <ComboboxPrimitive.Trigger
                   render={
                     <Button
-                      className="!min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
+                      className="inline-flex items-center gap-2 whitespace-nowrap shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
                       size="sm"
                       variant="outline"
                     />
@@ -569,16 +609,17 @@ export function TaskDialog({
                   <span className="flex items-center justify-center text-muted-foreground">
                     <TagIcon size={14} />
                   </span>
-                  <SelectValue>
+                  <ComboboxPrimitive.Value>
                     {(value) =>
                       Array.isArray(value) && value.length > 0 ? (
-                        <div className="flex items-center gap-1.5">
-                          {value.map((tag) => (
+                        <div className="flex items-center">
+                          {value.map((tag, index) => (
                             <span
-                              className="h-2 w-2 shrink-0 rounded-full"
-                              key={tag}
+                              className="h-2.5 w-2.5 shrink-0 rounded-full border border-background"
+                              key={tag.id}
                               style={{
-                                backgroundColor: TAG_COLORS[tag as Tag],
+                                backgroundColor: tag.color,
+                                marginLeft: index > 0 ? "-4px" : 0,
                               }}
                             />
                           ))}
@@ -587,37 +628,48 @@ export function TaskDialog({
                         "Tags"
                       )
                     }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPortal>
-                  <SelectPositioner
-                    align="start"
-                    alignItemWithTrigger={false}
-                    sideOffset={6}
-                  >
-                    <SelectPopup
-                      className="min-w-[150px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
-                      data-slot="select-popup"
-                    >
-                      <SelectSpacer />
-                      <SelectList className="p-0">
-                        {TAG_ITEMS.map((item) => (
-                          <SelectItem
-                            className="mx-1 min-h-8 gap-3 px-2 pr-1.5"
-                            key={item.value}
-                            value={item.value}
+                  </ComboboxPrimitive.Value>
+                </ComboboxPrimitive.Trigger>
+                <ComboboxPortal>
+                  <ComboboxPositioner side="bottom" sideOffset={6}>
+                    <ComboboxPopup className="min-w-[200px]">
+                      <ComboboxInput
+                        className="!rounded-none !bg-transparent !shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)] focus:!shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]"
+                        placeholder="Search tags..."
+                      />
+                      <ComboboxEmpty>No tags found</ComboboxEmpty>
+                      <div className="h-1 w-full shrink-0" />
+                      <ComboboxList>
+                        {(tag: Tag) => (
+                          <ComboboxItem
+                            indicatorPosition="right"
+                            key={tag.id}
+                            value={tag}
                           >
-                            <TagDot tag={item.value as Tag} />
-                            <SelectItemText>{item.label}</SelectItemText>
-                            <SelectItemIndicator className="text-muted-foreground" />
-                          </SelectItem>
-                        ))}
-                      </SelectList>
-                      <SelectSpacer />
-                    </SelectPopup>
-                  </SelectPositioner>
-                </SelectPortal>
-              </Select>
+                            <TagDot color={tag.color} />
+                            <span style={{ flex: 1 }}>{tag.name}</span>
+                          </ComboboxItem>
+                        )}
+                      </ComboboxList>
+                      <div className="h-1 w-full shrink-0" />
+                      <div className="px-1 shadow-[inset_0_1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]">
+                        <div className="h-1 w-full shrink-0" />
+                        <button
+                          className="flex w-full cursor-pointer items-center gap-2 rounded-[calc(var(--radius)-4px)] border-none bg-transparent px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-[var(--accent)] hover:text-foreground"
+                          onClick={() => {
+                            setTagComboboxOpen(false);
+                            setShowCreateTagDialog(true);
+                          }}
+                          type="button"
+                        >
+                          <Plus size={14} />
+                          <span>Add tag</span>
+                        </button>
+                      </div>
+                    </ComboboxPopup>
+                  </ComboboxPositioner>
+                </ComboboxPortal>
+              </Combobox>
 
               <Combobox<Assignee, true>
                 items={allAssignees}
@@ -729,7 +781,7 @@ export function TaskDialog({
             <div className="-mx-5 mt-6 flex items-center justify-between gap-2 border-t-[0.5px] border-t-[oklch(from_var(--border)_l_c_h_/_0.4)] px-5 pt-4">
               {mode === "edit" && (
                 <Button
-                  className="hover:!border-destructive hover:!bg-destructive hover:!text-destructive-foreground text-muted-foreground shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
+                  className="!transition-none text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:shadow-[0_0_0_1px_var(--destructive)]"
                   onClick={() => setShowDeleteDialog(true)}
                   size="sm"
                   type="button"
@@ -789,6 +841,65 @@ export function TaskDialog({
                   <div className="mt-4 flex justify-end gap-2">
                     <Button
                       onClick={() => setShowCreateAssigneeDialog(false)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="sm" type="submit">
+                      Create
+                    </Button>
+                  </div>
+                </form>
+              </DialogPopup>
+            </DialogPortal>
+          </Dialog>
+
+          <Dialog
+            onOpenChange={setShowCreateTagDialog}
+            open={showCreateTagDialog}
+          >
+            <DialogPortal>
+              <DialogOverlay className="z-[200]" />
+              <DialogPopup className="z-[201] max-w-[400px]">
+                <h2 className="mb-1 font-semibold text-lg">Add new tag</h2>
+                <p className="mb-4 text-muted-foreground text-sm">
+                  Create a new tag to categorize tasks.
+                </p>
+                <form onSubmit={handleCreateTag}>
+                  <Input
+                    autoFocus
+                    name="tagName"
+                    placeholder="Enter tag name..."
+                  />
+                  <div className="mt-4">
+                    <p className="mb-2 font-medium text-sm">Color</p>
+                    <div className="flex flex-wrap gap-2">
+                      {TAG_COLOR_OPTIONS.map((color) => (
+                        <button
+                          aria-label={color.label}
+                          className={cn(
+                            "flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 transition-all",
+                            newTagColor === color.value
+                              ? "border-foreground"
+                              : "border-transparent hover:border-muted-foreground/50"
+                          )}
+                          key={color.value}
+                          onClick={() => setNewTagColor(color.value)}
+                          type="button"
+                        >
+                          <span
+                            className="h-5 w-5 rounded-full"
+                            style={{ backgroundColor: color.value }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <Button
+                      onClick={() => setShowCreateTagDialog(false)}
                       size="sm"
                       type="button"
                       variant="outline"

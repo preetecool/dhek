@@ -301,6 +301,15 @@ export function KanbanCard<T extends KanbanItemProps = KanbanItemProps>({
     return cardContent;
   }
 
+  const handleClick = (e: React.MouseEvent) => {
+    // Don't open edit if we were dragging
+    if (isDragging) return;
+    // Don't open edit if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, [data-no-edit]")) return;
+    onEditItem(item);
+  };
+
   return (
     <div
       className="relative block"
@@ -310,7 +319,9 @@ export function KanbanCard<T extends KanbanItemProps = KanbanItemProps>({
       {...listeners}
     >
       <ContextMenu>
-        <ContextMenuTrigger className="block">{cardContent}</ContextMenuTrigger>
+        <ContextMenuTrigger className="block" onClick={handleClick}>
+          {cardContent}
+        </ContextMenuTrigger>
         <ContextMenuPortal>
           <ContextMenuPositioner>
             <ContextMenuPopup>

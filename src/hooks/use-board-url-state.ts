@@ -14,6 +14,7 @@ const DEFAULT_DATA: KanbanData = {
   columns: DEFAULT_COLUMNS,
   tasks: [],
   teamMembers: [],
+  tags: [],
 };
 
 function encodeBoard(data: KanbanData): string {
@@ -44,6 +45,7 @@ function decodeBoard(encoded: string): KanbanData | null {
         columns: parsed.columns,
         tasks: parsed.tasks,
         teamMembers: parsed.teamMembers ?? [],
+        tags: parsed.tags ?? [],
       };
     }
     return null;
@@ -138,6 +140,19 @@ export function useBoardUrlState() {
     []
   );
 
+  const setTags = useCallback(
+    (
+      newTags:
+        | KanbanData["tags"]
+        | ((prev: KanbanData["tags"]) => KanbanData["tags"])
+    ) => {
+      const tags =
+        typeof newTags === "function" ? newTags(boardData.tags) : newTags;
+      setBoardData({ ...boardData, tags });
+    },
+    []
+  );
+
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const isLoading = typeof window === "undefined";
 
@@ -146,6 +161,7 @@ export function useBoardUrlState() {
     setData,
     setTasks,
     setTeamMembers,
+    setTags,
     isLoading,
     shareUrl,
   };

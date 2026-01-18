@@ -6,6 +6,12 @@ export type Assignee = {
   avatar?: string;
 };
 
+export type Tag = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 export type Subtask = {
   id: string;
   title: string;
@@ -42,4 +48,5 @@ export type KanbanData = {
   tasks: Task[];
   columns: Column[];
   teamMembers: Assignee[];
+  tags: Tag[];
 };

@@ -10,7 +10,7 @@ import {
   Plus,
   User,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import {
 } from "./components/kanban";
 import { PriorityIcon } from "./components/priority-icon";
 import { TaskDialog } from "./components/task-dialog";
-import { capitalize } from "./project";
+import { capitalize, filterTasks, getDisplayColumns } from "./project";
 import type {
   FilterConfig,
   GroupByField,
@@ -269,6 +269,17 @@ export function KanbanBoard({
 }: KanbanBoardProps) {
   const tasks = data.tasks;
   const [filters, setFilters] = useState<FilterConfig>(DEFAULT_FILTERS);
+  const [groupBy, setGroupBy] = useState<GroupByField>("column");
+
+  const filteredTasks = useMemo(
+    () => filterTasks(tasks, filters),
+    [tasks, filters]
+  );
+
+  const displayColumns = useMemo(
+    () => getDisplayColumns(groupBy, data.columns, filteredTasks, data.tags),
+    [groupBy, data.columns, filteredTasks, data.tags]
+  );
 
   const setTasks = useCallback(
     (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
@@ -297,8 +308,6 @@ export function KanbanBoard({
   }, []);
 
   const activeFilterCount = filters.priority.length + filters.tags.length;
-
-  const [groupBy, setGroupBy] = useState<GroupByField>("column");
   const [dialogState, setDialogState] = useState<DialogState>({
     mode: "closed",
   });
@@ -385,8 +394,9 @@ export function KanbanBoard({
 
       {/* Board */}
       <KanbanProvider
-        columns={data.columns}
-        data={tasks}
+        columns={displayColumns}
+        data={filteredTasks}
+        groupBy={groupBy}
         onDataChange={setTasks}
         onDeleteItem={openDelete}
         onEditItem={openEdit}

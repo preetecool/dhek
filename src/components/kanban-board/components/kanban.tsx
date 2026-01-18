@@ -32,7 +32,8 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
-import { getTasksForColumn } from "../project";
+import { getTasksForGroup } from "../project";
+import type { GroupByField } from "../types";
 import {
   type KanbanColumnDataProps,
   type KanbanItemProps,
@@ -74,6 +75,7 @@ export type KanbanProviderProps<
   children: (column: C) => React.ReactNode;
   columns: C[];
   data: T[];
+  groupBy?: GroupByField;
   className?: string;
   onDataChange: (data: T[]) => void;
   onDragStart?: (event: DragStartEvent) => void;
@@ -91,6 +93,7 @@ export function KanbanProvider<
   children,
   columns,
   data,
+  groupBy = "column",
   className,
   onDataChange,
   onDragStart,
@@ -118,8 +121,9 @@ export function KanbanProvider<
   });
 
   const getItemsForColumn = useMemo(
-    () => (columnId: string) => getTasksForColumn(data, columnId) as T[],
-    [data]
+    () => (columnId: string) =>
+      getTasksForGroup(data, columnId, groupBy) as T[],
+    [data, groupBy]
   );
 
   const contextValue = useMemo<KanbanContextValue<T>>(

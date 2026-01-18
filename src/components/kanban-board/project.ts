@@ -1,4 +1,26 @@
-import type { Priority } from "./types";
+import type {
+  Column,
+  FilterConfig,
+  GroupByField,
+  Priority,
+  Tag,
+  Task,
+} from "./types";
+import type { KanbanItemProps } from "./use-kanban-dnd";
+
+export const PRIORITY_ORDER = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+} as const;
+
+export const PRIORITY_COLUMNS: Column[] = [
+  { id: "urgent", name: "Urgent", order: 0 },
+  { id: "high", name: "High Priority", order: 1 },
+  { id: "medium", name: "Medium Priority", order: 2 },
+  { id: "low", name: "Low Priority", order: 3 },
+];
 
 export const PRIORITY_ITEMS: { value: Priority; label: string }[] = [
   { value: "urgent", label: "Urgent" },
@@ -18,7 +40,7 @@ export const TAG_COLOR_OPTIONS = [
   { value: "#6b7280", label: "Gray" },
 ];
 
-export const GROUP_BY_ITEMS: { value: string; label: string }[] = [
+export const GROUP_BY_ITEMS: { value: GroupByField; label: string }[] = [
   { value: "column", label: "Status" },
   { value: "priority", label: "Priority" },
   { value: "tag", label: "Tag" },
@@ -28,11 +50,84 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export function getTasksForColumn<T extends { id: string; columnId: string }>(
-  items: T[],
-  columnId: string
+export function filterTasks(tasks: Task[], filters: FilterConfig): Task[] {
+  return tasks.filter((task) => {
+    if (
+      filters.priority.length > 0 &&
+      !filters.priority.includes(task.priority)
+    ) {
+      return false;
+    }
+    if (filters.tags.length > 0) {
+      const hasMatchingTag = filters.tags.some((tag) =>
+        task.tags.includes(tag)
+      );
+      if (!hasMatchingTag) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+export function sortItemsByPriority<T extends KanbanItemProps>(
+  items: T[]
 ): T[] {
-  return items.filter((item) => item.columnId === columnId);
+  return [...items].sort(
+    (a, b) =>
+      (PRIORITY_ORDER[a.priority as Priority] ?? 999) -
+      (PRIORITY_ORDER[b.priority as Priority] ?? 999)
+  );
+}
+
+export function getTasksForGroup<T extends KanbanItemProps>(
+  items: T[],
+  groupId: string,
+  groupBy: GroupByField
+): T[] {
+  let filtered: T[];
+  if (groupBy === "column") {
+    filtered = items.filter((item) => item.columnId === groupId);
+  } else if (groupBy === "priority") {
+    filtered = items.filter((item) => item.priority === groupId);
+  } else {
+    filtered = items.filter((item) => {
+      const tags = (item as unknown as { tags?: string[] }).tags;
+      return tags?.includes(groupId) ?? false;
+    });
+  }
+  return sortItemsByPriority(filtered);
+}
+
+export function getTagColumns(tasks: Task[], tags: Tag[]): Column[] {
+  const tagSet = new Set<string>();
+  for (const task of tasks) {
+    for (const tag of task.tags) {
+      tagSet.add(tag);
+    }
+  }
+  return tags
+    .filter((tag) => tagSet.has(tag.id))
+    .map((tag, index) => ({
+      id: tag.id,
+      name: capitalize(tag.name),
+      order: index,
+    }));
+}
+
+export function getDisplayColumns(
+  groupBy: GroupByField,
+  columns: Column[],
+  tasks: Task[],
+  tags: Tag[]
+): Column[] {
+  if (groupBy === "column") {
+    return columns;
+  }
+  if (groupBy === "priority") {
+    return PRIORITY_COLUMNS;
+  }
+  return getTagColumns(tasks, tags);
 }
 
 export function getTargetColumnId<

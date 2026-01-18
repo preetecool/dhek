@@ -3,14 +3,14 @@
 import { Share2 } from "lucide-react";
 import { useCallback, useRef } from "react";
 import { KanbanBoard } from "@/components/kanban-board/kanban-board";
-import type { Task } from "@/components/kanban-board/types";
+import type { Tag, Task } from "@/components/kanban-board/types";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { AnchoredToastProvider, showCopiedToast } from "@/components/ui/toast";
 import { useBoardUrlState } from "@/hooks/use-board-url-state";
 
 export function UrlKanbanBoard() {
-  const { data, setTasks, setTeamMembers, isLoading, shareUrl } =
+  const { data, setTasks, setTeamMembers, setTags, isLoading, shareUrl } =
     useBoardUrlState();
   const shareButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -26,6 +26,13 @@ export function UrlKanbanBoard() {
       setTeamMembers(members ?? []);
     },
     [setTeamMembers]
+  );
+
+  const handleTagsChange = useCallback(
+    (tags: Tag[]) => {
+      setTags(tags);
+    },
+    [setTags]
   );
 
   const handleShare = useCallback(async () => {
@@ -76,6 +83,7 @@ export function UrlKanbanBoard() {
         <main className="flex min-h-0 flex-1 flex-col" id="main-content">
           <KanbanBoard
             data={data}
+            onTagsChange={handleTagsChange}
             onTasksChange={handleTasksChange}
             onTeamMembersChange={handleTeamMembersChange}
           />

@@ -1,13 +1,5 @@
 import type { Priority } from "./types";
 
-export const AVAILABLE_TAGS = ["bug", "feature"] as const;
-export type Tag = (typeof AVAILABLE_TAGS)[number];
-
-export const TAG_COLORS: Record<Tag, string> = {
-  bug: "var(--destructive)",
-  feature: "var(--info)",
-};
-
 export const PRIORITY_ITEMS: { value: Priority; label: string }[] = [
   { value: "urgent", label: "Urgent" },
   { value: "high", label: "High" },
@@ -15,10 +7,16 @@ export const PRIORITY_ITEMS: { value: Priority; label: string }[] = [
   { value: "low", label: "Low" },
 ];
 
-export const TAG_ITEMS = AVAILABLE_TAGS.map((tag) => ({
-  value: tag,
-  label: capitalize(tag),
-}));
+export const TAG_COLOR_OPTIONS = [
+  { value: "#ef4444", label: "Red" },
+  { value: "#f97316", label: "Orange" },
+  { value: "#eab308", label: "Yellow" },
+  { value: "#22c55e", label: "Green" },
+  { value: "#3b82f6", label: "Blue" },
+  { value: "#8b5cf6", label: "Purple" },
+  { value: "#ec4899", label: "Pink" },
+  { value: "#6b7280", label: "Gray" },
+];
 
 export const GROUP_BY_ITEMS: { value: string; label: string }[] = [
   { value: "column", label: "Status" },

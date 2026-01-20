@@ -161,6 +161,11 @@ export function useKanbanDnd<
       if (enabled && over) {
         const activeId = event.active.id as string;
         const overId = over.id as string;
+
+        if (activeId === overId) {
+          return;
+        }
+
         const draggedItem = data.find((item) => item.id === activeId);
 
         if (draggedItem) {
@@ -199,6 +204,21 @@ export function useKanbanDnd<
             });
             return;
           }
+
+          const overItem = data.find((item) => item.id === overId);
+          if (overItem && getItemGroupId(overItem) === draggedGroupId) {
+            const activeIndex = data.findIndex((item) => item.id === activeId);
+            const overIndex = data.findIndex((item) => item.id === overId);
+
+            if (activeIndex !== overIndex) {
+              isUpdatingRef.current = true;
+              onDataChange(arrayMove(data, activeIndex, overIndex));
+              queueMicrotask(() => {
+                isUpdatingRef.current = false;
+              });
+              return;
+            }
+          }
         }
       }
 
@@ -209,27 +229,12 @@ export function useKanbanDnd<
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      const { active, over } = event;
-
       setActiveItemId(null);
       lastCrossGroupMoveRef.current = null;
       isUpdatingRef.current = false;
       onDragEnd?.(event);
-
-      if (!over || active.id === over.id) {
-        return;
-      }
-
-      const oldIndex = data.findIndex((item) => item.id === active.id);
-      const newIndex = data.findIndex((item) => item.id === over.id);
-
-      if (oldIndex === -1 || newIndex === -1) {
-        return;
-      }
-
-      onDataChange(arrayMove(data, oldIndex, newIndex));
     },
-    [data, onDataChange, onDragEnd]
+    [onDragEnd]
   );
 
   const announcements: Announcements = useMemo(

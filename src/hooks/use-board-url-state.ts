@@ -11,6 +11,7 @@ const DEFAULT_COLUMNS: Column[] = [
 ];
 
 const DEFAULT_DATA: KanbanData = {
+  name: "Kanban Board",
   columns: DEFAULT_COLUMNS,
   tasks: [],
   teamMembers: [],
@@ -24,6 +25,32 @@ function encodeBoard(data: KanbanData): string {
       (_, p1) => String.fromCharCode(Number.parseInt(p1, 16))
     )
   );
+}
+
+// Migrate old task format to new normalized format
+function migrateTask(task: Record<string, unknown>): Task {
+  const migrated = { ...task } as Task;
+
+  // Migrate tags -> tagIds
+  if ("tags" in task && !("tagIds" in task)) {
+    migrated.tagIds = task.tags as string[];
+  }
+
+  // Migrate assignees -> assigneeIds (extract IDs from embedded objects)
+  if ("assignees" in task && !("assigneeIds" in task)) {
+    const assignees = task.assignees as Array<{ id: string }> | undefined;
+    migrated.assigneeIds = assignees?.map((a) => a.id) ?? [];
+  }
+
+  // Clean up old properties
+  if ("tags" in migrated && "tagIds" in migrated) {
+    delete (migrated as Record<string, unknown>).tags;
+  }
+  if ("assignees" in migrated && "assigneeIds" in migrated) {
+    delete (migrated as Record<string, unknown>).assignees;
+  }
+
+  return migrated;
 }
 
 function decodeBoard(encoded: string): KanbanData | null {
@@ -41,9 +68,13 @@ function decodeBoard(encoded: string): KanbanData | null {
       Array.isArray(parsed.columns) &&
       Array.isArray(parsed.tasks)
     ) {
+      // Migrate tasks to new format
+      const migratedTasks = parsed.tasks.map(migrateTask);
+
       return {
+        name: parsed.name ?? "Kanban Board",
         columns: parsed.columns,
-        tasks: parsed.tasks,
+        tasks: migratedTasks,
         teamMembers: parsed.teamMembers ?? [],
         tags: parsed.tags ?? [],
       };
@@ -153,6 +184,10 @@ export function useBoardUrlState() {
     []
   );
 
+  const setName = useCallback((newName: string) => {
+    setBoardData({ ...boardData, name: newName });
+  }, []);
+
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const isLoading = typeof window === "undefined";
 
@@ -162,6 +197,7 @@ export function useBoardUrlState() {
     setTasks,
     setTeamMembers,
     setTags,
+    setName,
     isLoading,
     shareUrl,
   };

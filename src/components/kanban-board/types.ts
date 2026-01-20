@@ -24,8 +24,8 @@ export type Task = {
   description: string;
   columnId: string;
   priority: Priority;
-  tags: string[];
-  assignees?: Assignee[];
+  tagIds: string[];
+  assigneeIds?: string[];
   subtasks?: Subtask[];
   dueDate?: string;
   createdAt: string;
@@ -45,6 +45,7 @@ export type FilterConfig = {
 export type GroupByField = "column" | "priority" | "tag";
 
 export type KanbanData = {
+  name?: string;
   tasks: Task[];
   columns: Column[];
   teamMembers: Assignee[];

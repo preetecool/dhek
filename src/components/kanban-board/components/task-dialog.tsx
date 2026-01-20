@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useActionState, useCallback, useState } from "react";
+import { useActionState, useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,8 +39,8 @@ export interface TaskDialogProps {
     description: string;
     priority: Priority;
     columnId: string;
-    tags: string[];
-    assignees?: Assignee[];
+    tagIds: string[];
+    assigneeIds?: string[];
     subtasks?: Subtask[];
     dueDate?: string;
   };
@@ -98,19 +98,53 @@ export function TaskDialog({
     task?.dueDate ? task.dueDate.split("T")[0] : ""
   );
 
+  // Store IDs only - normalized state
   const [localAssignees, setLocalAssignees] = useState<Assignee[]>([]);
-  const [selectedAssignees, setSelectedAssignees] = useState<Assignee[]>(
-    () => task?.assignees ?? []
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>(
+    () => task?.assigneeIds ?? []
   );
 
   const [localTags, setLocalTags] = useState<Tag[]>([]);
-  const [selectedTags, setSelectedTags] = useState<Tag[]>(() => {
-    const taskTagIds = task?.tags ?? [];
-    return availableTags.filter((t) => taskTagIds.includes(t.id));
-  });
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
+    () => task?.tagIds ?? []
+  );
 
-  const allAssignees = [...assignees, ...localAssignees];
-  const allTags = [...availableTags, ...localTags];
+  // Combine props with locally created items
+  const allAssignees = useMemo(
+    () => [...assignees, ...localAssignees],
+    [assignees, localAssignees]
+  );
+  const allTags = useMemo(
+    () => [...availableTags, ...localTags],
+    [availableTags, localTags]
+  );
+
+  // Build index maps for O(1) lookup
+  const assigneeById = useMemo(
+    () => new Map(allAssignees.map((a) => [a.id, a])),
+    [allAssignees]
+  );
+  const tagById = useMemo(
+    () => new Map(allTags.map((t) => [t.id, t])),
+    [allTags]
+  );
+
+  // Compute selected objects from IDs for display
+  const selectedAssignees = useMemo(
+    () =>
+      selectedAssigneeIds
+        .map((id) => assigneeById.get(id))
+        .filter((a): a is Assignee => a !== undefined),
+    [selectedAssigneeIds, assigneeById]
+  );
+
+  const selectedTags = useMemo(
+    () =>
+      selectedTagIds
+        .map((id) => tagById.get(id))
+        .filter((t): t is Tag => t !== undefined),
+    [selectedTagIds, tagById]
+  );
 
   const defaultColumnId = columns[0]?.id ?? "";
   const defaultPriority = task?.priority ?? "medium";
@@ -134,8 +168,8 @@ export function TaskDialog({
         description,
         priority,
         columnId: taskColumnId,
-        tags: selectedTags.map((t) => t.id),
-        assignees: selectedAssignees,
+        tagIds: selectedTagIds,
+        assigneeIds: selectedAssigneeIds,
         subtasks: subtasks.filter((st) => st.title.trim()),
         dueDate: dueDate || undefined,
       };
@@ -145,8 +179,8 @@ export function TaskDialog({
     },
     [
       defaultSelectedColumnId,
-      selectedAssignees,
-      selectedTags,
+      selectedAssigneeIds,
+      selectedTagIds,
       subtasks,
       dueDate,
       onSave,
@@ -159,27 +193,39 @@ export function TaskDialog({
     initialFormState
   );
 
+  // Handler for creating new assignee - add to local state and select
   const handleCreateAssignee = useCallback(
     (newAssignee: Assignee) => {
       if (!onCreateAssignee) {
         setLocalAssignees((prev) => [...prev, newAssignee]);
       }
-      setSelectedAssignees((prev) => [...prev, newAssignee]);
+      setSelectedAssigneeIds((prev) => [...prev, newAssignee.id]);
       onCreateAssignee?.(newAssignee);
     },
     [onCreateAssignee]
   );
 
+  // Handler for creating new tag - add to local state and select
   const handleCreateTag = useCallback(
     (newTag: Tag) => {
       if (!onCreateTag) {
         setLocalTags((prev) => [...prev, newTag]);
       }
-      setSelectedTags((prev) => [...prev, newTag]);
+      setSelectedTagIds((prev) => [...prev, newTag.id]);
       onCreateTag?.(newTag);
     },
     [onCreateTag]
   );
+
+  // Handler for assignee selection change - convert objects to IDs
+  const handleAssigneesChange = useCallback((assigneesList: Assignee[]) => {
+    setSelectedAssigneeIds(assigneesList.map((a) => a.id));
+  }, []);
+
+  // Handler for tag selection change - convert objects to IDs
+  const handleTagsChange = useCallback((tagsList: Tag[]) => {
+    setSelectedTagIds(tagsList.map((t) => t.id));
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "l") {
@@ -259,7 +305,7 @@ export function TaskDialog({
 
               <TagsCombobox
                 onAddTagClick={() => setShowCreateTagDialog(true)}
-                onValueChange={setSelectedTags}
+                onValueChange={handleTagsChange}
                 selectedTags={selectedTags}
                 tags={allTags}
               />
@@ -267,7 +313,7 @@ export function TaskDialog({
               <AssigneesCombobox
                 assignees={allAssignees}
                 onAddAssigneeClick={() => setShowCreateAssigneeDialog(true)}
-                onValueChange={setSelectedAssignees}
+                onValueChange={handleAssigneesChange}
                 selectedAssignees={selectedAssignees}
               />
 

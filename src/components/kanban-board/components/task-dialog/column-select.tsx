@@ -82,7 +82,7 @@ export const ColumnSelect = memo(function ColumnSelect({
           sideOffset={6}
         >
           <SelectPopup
-            className="w-[200px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
+            className="w-[160px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
             data-slot="select-popup"
           >
             <SelectSpacer />

@@ -1,36 +1,8 @@
 "use client";
 
-import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import {
-  Calendar as CalendarIcon,
-  Check,
-  CheckCircle2,
-  Circle,
-  CircleAlert,
-  CircleDashed,
-  CircleDot,
-  Command,
-  Loader2,
-  Plus,
-  Tag as TagIcon,
-  Users,
-  X,
-} from "lucide-react";
-import { useCallback, useState } from "react";
+import { Loader2, X } from "lucide-react";
+import { useActionState, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Checkbox, CheckboxIndicator } from "@/components/ui/checkbox";
-import { CheckboxGroup } from "@/components/ui/checkbox-group";
-import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-  ComboboxPortal,
-  ComboboxPositioner,
-} from "@/components/ui/combobox";
 import {
   Dialog,
   DialogClose,
@@ -39,28 +11,7 @@ import {
   DialogPortal,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Kbd } from "@/components/ui/kbd";
-import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectItem,
-  SelectItemIndicator,
-  SelectItemText,
-  SelectList,
-  SelectPopup,
-  SelectPortal,
-  SelectPositioner,
-  SelectSpacer,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import {
-  formatDateString,
-  PRIORITY_ITEMS,
-  parseDateString,
-  TAG_COLOR_OPTIONS,
-} from "../project";
 import type {
   Assignee,
   Column,
@@ -71,58 +22,16 @@ import type {
   Task,
 } from "../types";
 import { DeleteDialog } from "./delete-dialog";
+import { AssigneesCombobox } from "./task-dialog/assignees-combobox";
+import { ColumnSelect } from "./task-dialog/column-select";
+import { CreateAssigneeDialog } from "./task-dialog/create-assignee-dialog";
+import { CreateTagDialog } from "./task-dialog/create-tag-dialog";
+import { DueDatePicker } from "./task-dialog/due-date-picker";
+import { PrioritySelect } from "./task-dialog/priority-select";
+import { SubtasksList } from "./task-dialog/subtasks-list";
+import { TagsCombobox } from "./task-dialog/tags-combobox";
 
-const PRIORITY_CONFIG: Record<
-  Priority,
-  { icon: React.ReactNode; label: string }
-> = {
-  urgent: { icon: <CircleAlert size={14} />, label: "Urgent" },
-  high: { icon: <PriorityBars count={3} />, label: "High" },
-  medium: { icon: <PriorityBars count={2} />, label: "Medium" },
-  low: { icon: <PriorityBars count={1} />, label: "Low" },
-};
-
-const COLUMN_ICONS: Record<string, React.ReactNode> = {
-  backlog: <CircleDashed size={14} />,
-  todo: <Circle size={14} />,
-  "in-progress": <CircleDot size={14} />,
-  done: <CheckCircle2 size={14} />,
-};
-
-function PriorityBars({ count }: { count: number }) {
-  return (
-    <svg fill="currentColor" height="14" viewBox="0 0 14 14" width="14">
-      <rect height="4" rx="1" width="3" x="1" y="9" />
-      <rect
-        height="7"
-        opacity={count >= 2 ? 1 : 0.3}
-        rx="1"
-        width="3"
-        x="5.5"
-        y="6"
-      />
-      <rect
-        height="10"
-        opacity={count >= 3 ? 1 : 0.3}
-        rx="1"
-        width="3"
-        x="10"
-        y="3"
-      />
-    </svg>
-  );
-}
-
-function TagDot({ color }: { color: string }) {
-  return (
-    <span
-      className="h-2 w-2 shrink-0 rounded-full"
-      style={{ backgroundColor: color }}
-    />
-  );
-}
-
-export type TaskDialogProps = {
+export interface TaskDialogProps {
   open: boolean;
   mode: "create" | "edit";
   task?: {
@@ -149,6 +58,16 @@ export type TaskDialogProps = {
   onDelete?: () => void;
   onCreateAssignee?: (assignee: Assignee) => void;
   onCreateTag?: (tag: Tag) => void;
+}
+
+interface FormState {
+  status: "idle" | "error";
+  error: string | null;
+}
+
+const initialFormState: FormState = {
+  status: "idle",
+  error: null,
 };
 
 export function TaskDialog({
@@ -171,45 +90,38 @@ export function TaskDialog({
   const [showCreateAssigneeDialog, setShowCreateAssigneeDialog] =
     useState(false);
   const [showCreateTagDialog, setShowCreateTagDialog] = useState(false);
-  const [subtasks, setSubtasks] = useState<Subtask[]>(task?.subtasks ?? []);
-  const [dueDate, setDueDate] = useState(
+
+  const [subtasks, setSubtasks] = useState<Subtask[]>(
+    () => task?.subtasks ?? []
+  );
+  const [dueDate, setDueDate] = useState(() =>
     task?.dueDate ? task.dueDate.split("T")[0] : ""
   );
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+
   const [localAssignees, setLocalAssignees] = useState<Assignee[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<Assignee[]>(
-    task?.assignees ?? []
+    () => task?.assignees ?? []
   );
-  const [assigneeComboboxOpen, setAssigneeComboboxOpen] = useState(false);
-  const allAssignees = [...assignees, ...localAssignees];
 
   const [localTags, setLocalTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<Tag[]>(() => {
     const taskTagIds = task?.tags ?? [];
     return availableTags.filter((t) => taskTagIds.includes(t.id));
   });
-  const [tagComboboxOpen, setTagComboboxOpen] = useState(false);
-  const [newTagColor, setNewTagColor] = useState(TAG_COLOR_OPTIONS[0].value);
+
+  const allAssignees = [...assignees, ...localAssignees];
   const allTags = [...availableTags, ...localTags];
 
   const defaultColumnId = columns[0]?.id ?? "";
   const defaultPriority = task?.priority ?? "medium";
   const defaultSelectedColumnId = task?.columnId ?? columnId ?? defaultColumnId;
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      setError(null);
-      setIsPending(true);
-
-      const formData = new FormData(e.currentTarget);
+  const submitAction = useCallback(
+    (_prevState: FormState, formData: FormData): FormState => {
       const title = (formData.get("title") as string)?.trim();
 
       if (!title) {
-        setError("Title is required");
-        setIsPending(false);
-        return;
+        return { status: "error", error: "Title is required" };
       }
 
       const description = (formData.get("description") as string) ?? "";
@@ -229,7 +141,7 @@ export function TaskDialog({
       };
 
       onSave(taskData, taskId);
-      setIsPending(false);
+      return { status: "idle", error: null };
     },
     [
       defaultSelectedColumnId,
@@ -242,84 +154,46 @@ export function TaskDialog({
     ]
   );
 
+  const [formState, formAction, isPending] = useActionState(
+    submitAction,
+    initialFormState
+  );
+
   const handleCreateAssignee = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      const name = (formData.get("assigneeName") as string)?.trim();
-
-      if (!name) return;
-
-      const newAssignee: Assignee = {
-        id: `assignee-${crypto.randomUUID()}`,
-        name,
-      };
-
-      // Only add to local state if parent doesn't handle persistence
+    (newAssignee: Assignee) => {
       if (!onCreateAssignee) {
         setLocalAssignees((prev) => [...prev, newAssignee]);
       }
       setSelectedAssignees((prev) => [...prev, newAssignee]);
       onCreateAssignee?.(newAssignee);
-      setShowCreateAssigneeDialog(false);
     },
     [onCreateAssignee]
   );
 
   const handleCreateTag = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      const name = (formData.get("tagName") as string)?.trim();
-
-      if (!name) return;
-
-      const newTag: Tag = {
-        id: `tag-${crypto.randomUUID()}`,
-        name,
-        color: newTagColor,
-      };
-
-      // Only add to local state if parent doesn't handle persistence
+    (newTag: Tag) => {
       if (!onCreateTag) {
         setLocalTags((prev) => [...prev, newTag]);
       }
       setSelectedTags((prev) => [...prev, newTag]);
       onCreateTag?.(newTag);
-      setShowCreateTagDialog(false);
-      setNewTagColor(TAG_COLOR_OPTIONS[0].value);
     },
-    [onCreateTag, newTagColor]
+    [onCreateTag]
   );
 
-  const addSubtask = useCallback(() => {
-    const newSubtask: Subtask = {
-      id: `subtask-${crypto.randomUUID()}`,
-      title: "",
-      completed: false,
-    };
-    setSubtasks((prev) => [...prev, newSubtask]);
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "l") {
+      e.preventDefault();
+      setSubtasks((prev) => [
+        ...prev,
+        {
+          id: `subtask-${crypto.randomUUID()}`,
+          title: "",
+          completed: false,
+        },
+      ]);
+    }
   }, []);
-
-  const updateSubtask = useCallback((id: string, updates: Partial<Subtask>) => {
-    setSubtasks((prev) =>
-      prev.map((st) => (st.id === id ? { ...st, ...updates } : st))
-    );
-  }, []);
-
-  const removeSubtask = useCallback((id: string) => {
-    setSubtasks((prev) => prev.filter((st) => st.id !== id));
-  }, []);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "l") {
-        e.preventDefault();
-        addSubtask();
-      }
-    },
-    [addSubtask]
-  );
 
   if (!open) {
     return null;
@@ -334,15 +208,9 @@ export function TaskDialog({
           data-kanban-dialog
           onKeyDown={handleKeyDown}
         >
-          <form className="mt-0 flex flex-col gap-1" onSubmit={handleSubmit}>
-            <input
-              name="subtasks"
-              type="hidden"
-              value={JSON.stringify(subtasks)}
-            />
-            <input name="dueDate" type="hidden" value={dueDate} />
-
+          <form action={formAction} className="mt-0 flex flex-col gap-1">
             <Input
+              aria-invalid={formState.error ? "true" : "false"}
               autoFocus
               className={cn(
                 "rounded-none py-2 font-semibold text-xl leading-[1.3] tracking-[-0.01em]",
@@ -353,10 +221,13 @@ export function TaskDialog({
               )}
               data-variant="borderless"
               defaultValue={task?.title ?? ""}
+              disabled={isPending}
               name="title"
               placeholder={mode === "create" ? "New task..." : "Task title..."}
             />
-            {error && <p className="m-0 text-destructive text-xs">{error}</p>}
+            {formState.error ? (
+              <p className="m-0 text-destructive text-xs">{formState.error}</p>
+            ) : null}
 
             <Input
               className={cn(
@@ -368,418 +239,43 @@ export function TaskDialog({
               )}
               data-variant="borderless"
               defaultValue={task?.description ?? ""}
+              disabled={isPending}
               name="description"
               placeholder="Add description..."
             />
 
-            <div className="mt-3 flex flex-col gap-1">
-              <CheckboxGroup
-                allValues={subtasks.map((st) => st.id)}
-                aria-label="Subtasks"
-                className="flex flex-col gap-0"
-                onValueChange={(values) => {
-                  for (const subtask of subtasks) {
-                    const shouldBeCompleted = values.includes(subtask.id);
-                    if (subtask.completed !== shouldBeCompleted) {
-                      updateSubtask(subtask.id, {
-                        completed: shouldBeCompleted,
-                      });
-                    }
-                  }
-                }}
-                value={subtasks.filter((st) => st.completed).map((st) => st.id)}
-              >
-                {subtasks.map((subtask) => (
-                  <div
-                    className="group flex items-center gap-2 rounded-[var(--radius-sm)] py-1"
-                    key={subtask.id}
-                  >
-                    <Checkbox
-                      className={cn(
-                        "h-4 w-4 rounded-[0.25rem]",
-                        "data-[unchecked]:border-[oklch(from_var(--border)_l_c_h_/_0.6)]",
-                        "data-[checked]:border-primary data-[checked]:bg-primary"
-                      )}
-                      name={`subtask-${subtask.id}`}
-                      value={subtask.id}
-                    >
-                      <CheckboxIndicator>
-                        <Check aria-hidden="true" size={12} strokeWidth={3} />
-                      </CheckboxIndicator>
-                    </Checkbox>
-                    <input
-                      autoFocus={!subtask.title}
-                      className={cn(
-                        "flex-1 border-none bg-transparent py-1 text-foreground text-sm outline-none",
-                        "placeholder:text-muted-foreground placeholder:opacity-60",
-                        subtask.completed &&
-                          "text-muted-foreground line-through"
-                      )}
-                      name={`subtask-title-${subtask.id}`}
-                      onChange={(e) =>
-                        updateSubtask(subtask.id, { title: e.target.value })
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addSubtask();
-                        }
-                        if (e.key === "Backspace" && !subtask.title) {
-                          e.preventDefault();
-                          removeSubtask(subtask.id);
-                        }
-                      }}
-                      placeholder="Subtask title..."
-                      value={subtask.title}
-                    />
-                    <button
-                      aria-label="Remove subtask"
-                      className="flex cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border-none bg-transparent p-1 text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-destructive group-hover:opacity-100"
-                      onClick={() => removeSubtask(subtask.id)}
-                      type="button"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </CheckboxGroup>
-              <button
-                className="flex cursor-pointer items-center gap-2 border-none bg-transparent py-1.5 text-muted-foreground text-sm transition-colors duration-150 hover:text-foreground"
-                onClick={addSubtask}
-                type="button"
-              >
-                <Plus size={14} />
-                <span>Add subtask</span>
-                <Kbd className="ml-auto" size="sm">
-                  <Command size={10} />L
-                </Kbd>
-              </button>
-            </div>
+            <SubtasksList onSubtasksChange={setSubtasks} subtasks={subtasks} />
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Select
-                defaultValue={defaultPriority}
-                items={PRIORITY_ITEMS}
-                name="priority"
-              >
-                <SelectTrigger
-                  className="!min-w-0 inline-flex items-center gap-2 whitespace-nowrap [&_[data-slot=select-value]]:flex [&_[data-slot=select-value]]:items-center [&_[data-slot=select-value]]:gap-2"
-                  render={
-                    <Button
-                      className="!min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
-                      size="sm"
-                      variant="outline"
-                    />
-                  }
-                >
-                  <SelectValue>
-                    {(value) => (
-                      <>
-                        <span
-                          className={cn(
-                            "flex items-center justify-center text-muted-foreground",
-                            value === "urgent" && "text-[var(--urgent)]"
-                          )}
-                        >
-                          {PRIORITY_CONFIG[value as Priority].icon}
-                        </span>
-                        {PRIORITY_CONFIG[value as Priority].label}
-                      </>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPortal>
-                  <SelectPositioner
-                    align="start"
-                    alignItemWithTrigger={false}
-                    className="min-w-[140px]"
-                    sideOffset={6}
-                  >
-                    <SelectPopup
-                      className="w-[200px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
-                      data-slot="select-popup"
-                    >
-                      <SelectSpacer />
-                      <SelectList className="p-0">
-                        {PRIORITY_ITEMS.map((p) => (
-                          <SelectItem
-                            className="mx-1 min-h-8 gap-3 px-2 pr-1.5"
-                            key={p.value}
-                            value={p.value}
-                          >
-                            <span className="flex items-center justify-center text-muted-foreground">
-                              {PRIORITY_CONFIG[p.value].icon}
-                            </span>
-                            <SelectItemText>{p.label}</SelectItemText>
-                            <SelectItemIndicator className="text-muted-foreground" />
-                          </SelectItem>
-                        ))}
-                      </SelectList>
-                      <SelectSpacer />
-                    </SelectPopup>
-                  </SelectPositioner>
-                </SelectPortal>
-              </Select>
+              <PrioritySelect defaultValue={defaultPriority} name="priority" />
 
-              {groupBy === "column" && (
-                <Select
+              {groupBy === "column" ? (
+                <ColumnSelect
+                  columns={columns}
                   defaultValue={defaultSelectedColumnId}
-                  items={columns.map((col) => ({
-                    value: col.id,
-                    label: col.name,
-                  }))}
                   name="columnId"
-                >
-                  <SelectTrigger
-                    className="!min-w-0 inline-flex items-center gap-2 whitespace-nowrap [&_[data-slot=select-value]]:flex [&_[data-slot=select-value]]:items-center [&_[data-slot=select-value]]:gap-2"
-                    render={
-                      <Button
-                        className="!min-w-0 shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
-                        size="sm"
-                        variant="outline"
-                      />
-                    }
-                  >
-                    <SelectValue>
-                      {(value) => {
-                        const col = columns.find((c) => c.id === value);
-                        return (
-                          <>
-                            <span className="flex items-center justify-center text-muted-foreground">
-                              {COLUMN_ICONS[value] ?? <Circle size={14} />}
-                            </span>
-                            {col?.name ?? "Select column"}
-                          </>
-                        );
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPortal>
-                    <SelectPositioner
-                      align="start"
-                      alignItemWithTrigger={false}
-                      className="min-w-[160px]"
-                      sideOffset={6}
-                    >
-                      <SelectPopup
-                        className="w-[200px] shadow-[0_0_0_0.5px_oklch(from_var(--border)_l_c_h_/_0.8),var(--shadow-border-stack)]"
-                        data-slot="select-popup"
-                      >
-                        <SelectSpacer />
-                        <SelectList className="p-0">
-                          {columns.map((col) => (
-                            <SelectItem
-                              className="mx-1 min-h-8 gap-3 px-2 pr-1.5"
-                              key={col.id}
-                              value={col.id}
-                            >
-                              <span className="flex items-center justify-center text-muted-foreground">
-                                {COLUMN_ICONS[col.id] ?? <Circle size={14} />}
-                              </span>
-                              <SelectItemText>{col.name}</SelectItemText>
-                              <SelectItemIndicator className="text-muted-foreground" />
-                            </SelectItem>
-                          ))}
-                        </SelectList>
-                        <SelectSpacer />
-                      </SelectPopup>
-                    </SelectPositioner>
-                  </SelectPortal>
-                </Select>
-              )}
+                />
+              ) : null}
 
-              <Combobox<Tag, true>
-                items={allTags}
-                multiple
-                name="tags"
-                onOpenChange={setTagComboboxOpen}
+              <TagsCombobox
+                onAddTagClick={() => setShowCreateTagDialog(true)}
                 onValueChange={setSelectedTags}
-                open={tagComboboxOpen}
-                value={selectedTags}
-              >
-                <ComboboxPrimitive.Trigger
-                  render={
-                    <Button
-                      className="inline-flex items-center gap-2 whitespace-nowrap shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
-                      size="sm"
-                      variant="outline"
-                    />
-                  }
-                >
-                  <span className="flex items-center justify-center text-muted-foreground">
-                    <TagIcon size={14} />
-                  </span>
-                  <ComboboxPrimitive.Value>
-                    {(value) =>
-                      Array.isArray(value) && value.length > 0 ? (
-                        <div className="flex items-center">
-                          {value.map((tag, index) => (
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full border border-background"
-                              key={tag.id}
-                              style={{
-                                backgroundColor: tag.color,
-                                marginLeft: index > 0 ? "-4px" : 0,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        "Tags"
-                      )
-                    }
-                  </ComboboxPrimitive.Value>
-                </ComboboxPrimitive.Trigger>
-                <ComboboxPortal>
-                  <ComboboxPositioner side="bottom" sideOffset={6}>
-                    <ComboboxPopup className="min-w-[200px]">
-                      <ComboboxInput
-                        className="!rounded-none !bg-transparent !shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)] focus:!shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]"
-                        placeholder="Search tags..."
-                      />
-                      <ComboboxEmpty>No tags found</ComboboxEmpty>
-                      <div className="h-1 w-full shrink-0" />
-                      <ComboboxList>
-                        {(tag: Tag) => (
-                          <ComboboxItem
-                            indicatorPosition="right"
-                            key={tag.id}
-                            value={tag}
-                          >
-                            <TagDot color={tag.color} />
-                            <span style={{ flex: 1 }}>{tag.name}</span>
-                          </ComboboxItem>
-                        )}
-                      </ComboboxList>
-                      <div className="h-1 w-full shrink-0" />
-                      <div className="px-1 shadow-[inset_0_1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]">
-                        <div className="h-1 w-full shrink-0" />
-                        <button
-                          className="flex w-full cursor-pointer items-center gap-2 rounded-[calc(var(--radius)-4px)] border-none bg-transparent px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-[var(--accent)] hover:text-foreground"
-                          onClick={() => {
-                            setTagComboboxOpen(false);
-                            setShowCreateTagDialog(true);
-                          }}
-                          type="button"
-                        >
-                          <Plus size={14} />
-                          <span>Add tag</span>
-                        </button>
-                      </div>
-                    </ComboboxPopup>
-                  </ComboboxPositioner>
-                </ComboboxPortal>
-              </Combobox>
+                selectedTags={selectedTags}
+                tags={allTags}
+              />
 
-              <Combobox<Assignee, true>
-                items={allAssignees}
-                multiple
-                name="assignees"
-                onOpenChange={setAssigneeComboboxOpen}
+              <AssigneesCombobox
+                assignees={allAssignees}
+                onAddAssigneeClick={() => setShowCreateAssigneeDialog(true)}
                 onValueChange={setSelectedAssignees}
-                open={assigneeComboboxOpen}
-                value={selectedAssignees}
-              >
-                <ComboboxPrimitive.Trigger
-                  render={
-                    <Button
-                      className="inline-flex items-center gap-2 whitespace-nowrap shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
-                      size="sm"
-                      variant="outline"
-                    />
-                  }
-                >
-                  <span className="flex items-center justify-center text-muted-foreground">
-                    <Users size={14} />
-                  </span>
-                  <ComboboxPrimitive.Value>
-                    {(value) =>
-                      Array.isArray(value) && value.length > 0
-                        ? `${value.length} assignee${value.length > 1 ? "s" : ""}`
-                        : "Assignees"
-                    }
-                  </ComboboxPrimitive.Value>
-                </ComboboxPrimitive.Trigger>
-                <ComboboxPortal>
-                  <ComboboxPositioner side="bottom" sideOffset={6}>
-                    <ComboboxPopup className="min-w-[200px]">
-                      <ComboboxInput
-                        className="!rounded-none !bg-transparent !shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)] focus:!shadow-[inset_0_-1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]"
-                        placeholder="Search assignees..."
-                      />
-                      <ComboboxEmpty>No users found</ComboboxEmpty>
-                      <div className="h-1 w-full shrink-0" />
-                      <ComboboxList>
-                        {(assignee: Assignee) => (
-                          <ComboboxItem
-                            indicatorPosition="right"
-                            key={assignee.id}
-                            value={assignee}
-                          >
-                            <span style={{ flex: 1 }}>{assignee.name}</span>
-                          </ComboboxItem>
-                        )}
-                      </ComboboxList>
-                      <div className="h-1 w-full shrink-0" />
-                      <div className="px-1 shadow-[inset_0_1px_0_0_oklch(from_var(--border)_l_c_h_/_0.8)]">
-                        <div className="h-1 w-full shrink-0" />
-                        <button
-                          className="flex w-full cursor-pointer items-center gap-2 rounded-[calc(var(--radius)-4px)] border-none bg-transparent px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-[var(--accent)] hover:text-foreground"
-                          onClick={() => {
-                            setAssigneeComboboxOpen(false);
-                            setShowCreateAssigneeDialog(true);
-                          }}
-                          type="button"
-                        >
-                          <Plus size={14} />
-                          <span>Add assignee</span>
-                        </button>
-                      </div>
-                    </ComboboxPopup>
-                  </ComboboxPositioner>
-                </ComboboxPortal>
-              </Combobox>
+                selectedAssignees={selectedAssignees}
+              />
 
-              <Popover>
-                <PopoverTrigger
-                  className="inline-flex items-center gap-2"
-                  render={
-                    <Button
-                      className="shadow-[0_0_0_1px_oklch(from_var(--border)_l_c_h_/_0.4)]"
-                      size="sm"
-                      variant="outline"
-                    />
-                  }
-                >
-                  <span className="flex items-center justify-center text-muted-foreground">
-                    <CalendarIcon size={14} />
-                  </span>
-                  {dueDate
-                    ? parseDateString(dueDate).toLocaleDateString()
-                    : "Due date"}
-                </PopoverTrigger>
-                <PopoverPopup
-                  align="start"
-                  arrow={false}
-                  className="z-[200]"
-                  sideOffset={6}
-                >
-                  <Calendar
-                    className="p-0"
-                    mode="single"
-                    onSelect={(date) => {
-                      setDueDate(date ? formatDateString(date) : "");
-                    }}
-                    selected={
-                      dueDate.length > 0 ? parseDateString(dueDate) : undefined
-                    }
-                  />
-                </PopoverPopup>
-              </Popover>
+              <DueDatePicker onChange={setDueDate} value={dueDate} />
             </div>
 
             <div className="-mx-5 mt-6 flex items-center justify-between gap-2 border-t-[0.5px] border-t-[oklch(from_var(--border)_l_c_h_/_0.4)] px-5 pt-4">
-              {mode === "edit" && (
+              {mode === "edit" ? (
                 <Button
                   className="!transition-none text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:shadow-[0_0_0_1px_var(--destructive)]"
                   onClick={() => setShowDeleteDialog(true)}
@@ -789,16 +285,16 @@ export function TaskDialog({
                 >
                   Delete
                 </Button>
-              )}
+              ) : null}
               <div className="ml-auto flex items-center gap-1.5">
                 <Button disabled={isPending} size="sm" type="submit">
-                  {isPending && (
+                  {isPending ? (
                     <Loader2
                       aria-hidden="true"
                       className="animate-spin"
                       size={14}
                     />
-                  )}
+                  ) : null}
                   {mode === "create" ? "Create" : "Save"}
                 </Button>
               </div>
@@ -821,99 +317,17 @@ export function TaskDialog({
             open={showDeleteDialog}
           />
 
-          <Dialog
+          <CreateAssigneeDialog
+            onCreateAssignee={handleCreateAssignee}
             onOpenChange={setShowCreateAssigneeDialog}
             open={showCreateAssigneeDialog}
-          >
-            <DialogPortal>
-              <DialogOverlay className="z-[200]" />
-              <DialogPopup className="z-[201] max-w-[400px]">
-                <h2 className="mb-1 font-semibold text-lg">Add new assignee</h2>
-                <p className="mb-4 text-muted-foreground text-sm">
-                  Create a new team member to assign tasks to.
-                </p>
-                <form onSubmit={handleCreateAssignee}>
-                  <Input
-                    autoFocus
-                    name="assigneeName"
-                    placeholder="Enter name..."
-                  />
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      onClick={() => setShowCreateAssigneeDialog(false)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Cancel
-                    </Button>
-                    <Button size="sm" type="submit">
-                      Create
-                    </Button>
-                  </div>
-                </form>
-              </DialogPopup>
-            </DialogPortal>
-          </Dialog>
+          />
 
-          <Dialog
+          <CreateTagDialog
+            onCreateTag={handleCreateTag}
             onOpenChange={setShowCreateTagDialog}
             open={showCreateTagDialog}
-          >
-            <DialogPortal>
-              <DialogOverlay className="z-[200]" />
-              <DialogPopup className="z-[201] max-w-[400px]">
-                <h2 className="mb-1 font-semibold text-lg">Add new tag</h2>
-                <p className="mb-4 text-muted-foreground text-sm">
-                  Create a new tag to categorize tasks.
-                </p>
-                <form onSubmit={handleCreateTag}>
-                  <Input
-                    autoFocus
-                    name="tagName"
-                    placeholder="Enter tag name..."
-                  />
-                  <div className="mt-4">
-                    <p className="mb-2 font-medium text-sm">Color</p>
-                    <div className="flex flex-wrap gap-2">
-                      {TAG_COLOR_OPTIONS.map((color) => (
-                        <button
-                          aria-label={color.label}
-                          className={cn(
-                            "flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 transition-all",
-                            newTagColor === color.value
-                              ? "border-foreground"
-                              : "border-transparent hover:border-muted-foreground/50"
-                          )}
-                          key={color.value}
-                          onClick={() => setNewTagColor(color.value)}
-                          type="button"
-                        >
-                          <span
-                            className="h-5 w-5 rounded-full"
-                            style={{ backgroundColor: color.value }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      onClick={() => setShowCreateTagDialog(false)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Cancel
-                    </Button>
-                    <Button size="sm" type="submit">
-                      Create
-                    </Button>
-                  </div>
-                </form>
-              </DialogPopup>
-            </DialogPortal>
-          </Dialog>
+          />
         </DialogPopup>
       </DialogPortal>
     </Dialog>

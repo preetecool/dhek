@@ -285,7 +285,6 @@ export function KanbanBoard({
     (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
       const updated =
         typeof newTasks === "function" ? newTasks(tasks) : newTasks;
-      // Defer to avoid setState during render
       queueMicrotask(() => onTasksChange?.(updated));
     },
     [tasks, onTasksChange]

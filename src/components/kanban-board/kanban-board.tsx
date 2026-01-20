@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { DeleteDialog } from "./components/delete-dialog";
-import { ActiveFilters, FilterBar } from "./components/filter-bar";
+import { FilterBar } from "./components/filter-bar";
 import {
   KanbanCard,
   KanbanCardList,
@@ -35,6 +35,7 @@ import { PriorityIcon } from "./components/priority-icon";
 import { TaskDialog } from "./components/task-dialog";
 import { capitalize, filterTasks, getDisplayColumns } from "./project";
 import type {
+  Assignee,
   FilterConfig,
   GroupByField,
   KanbanData,
@@ -83,10 +84,12 @@ function useCurrentDate() {
 function TaskCardContent({
   task,
   tags,
+  teamMembers,
   onEdit,
 }: {
   task: Task;
   tags: Tag[];
+  teamMembers: Assignee[];
   onEdit?: (task: Task) => void;
 }) {
   const now = useCurrentDate();
@@ -95,13 +98,24 @@ function TaskCardContent({
     task.subtasks?.filter((st) => st.completed).length ?? 0;
   const daysLeft = getDaysLeft(task.dueDate, now);
   const tagMap = new Map(tags.map((t) => [t.id, t]));
+  const assigneeMap = new Map(teamMembers.map((a) => [a.id, a]));
+
+  // Look up assignees by ID
+  const assignees = useMemo(() => {
+    if (!task.assigneeIds) {
+      return [];
+    }
+    return task.assigneeIds
+      .map((id) => assigneeMap.get(id))
+      .filter((a): a is Assignee => a !== undefined);
+  }, [task.assigneeIds, assigneeMap]);
 
   const renderAssignees = () => {
-    if (!task.assignees) {
+    if (!task.assigneeIds) {
       return null;
     }
 
-    if (task.assignees.length > 0) {
+    if (assignees.length > 0) {
       return (
         <Button
           aria-label="Edit assignees"
@@ -109,7 +123,7 @@ function TaskCardContent({
           onClick={() => onEdit?.(task)}
           variant="ghost"
         >
-          {task.assignees.slice(0, 3).map((user) => (
+          {assignees.slice(0, 3).map((user) => (
             <div className="-ml-2 first:ml-0" key={user.id}>
               <Avatar className="h-6 w-6 border-[0.5px] border-[oklch(from_var(--border)_l_c_h_/_0.1)] text-[0.5rem]">
                 <AvatarImage alt={user.name} src={user.avatar} />
@@ -122,9 +136,9 @@ function TaskCardContent({
               </Avatar>
             </div>
           ))}
-          {task.assignees.length > 3 && (
+          {assignees.length > 3 && (
             <div className="-ml-2 flex h-6 w-6 items-center justify-center rounded-full border-[0.5px] border-[oklch(from_var(--border)_l_c_h_/_0.2)] bg-muted font-medium text-[0.5rem] text-muted-foreground">
-              +{task.assignees.length - 3}
+              +{assignees.length - 3}
             </div>
           )}
         </Button>
@@ -162,9 +176,9 @@ function TaskCardContent({
           onPointerDown={(e) => e.stopPropagation()}
         >
           <PriorityIcon priority={task.priority} />
-          {task.tags.length > 0 && (
+          {task.tagIds.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {task.tags.map((tagId) => {
+              {task.tagIds.map((tagId) => {
                 const tag = tagMap.get(tagId);
                 if (!tag) return null;
                 return (
@@ -285,7 +299,6 @@ export function KanbanBoard({
     (newTasks: Task[] | ((prev: Task[]) => Task[])) => {
       const updated =
         typeof newTasks === "function" ? newTasks(tasks) : newTasks;
-      // Defer to avoid setState during render
       queueMicrotask(() => onTasksChange?.(updated));
     },
     [tasks, onTasksChange]
@@ -307,7 +320,6 @@ export function KanbanBoard({
     }));
   }, []);
 
-  const activeFilterCount = filters.priority.length + filters.tags.length;
   const [dialogState, setDialogState] = useState<DialogState>({
     mode: "closed",
   });
@@ -381,17 +393,6 @@ export function KanbanBoard({
         tags={data.tags}
       />
 
-      {activeFilterCount > 0 && (
-        <div className="px-4 pb-2">
-          <ActiveFilters
-            filters={filters}
-            onRemovePriority={(p) => togglePriority(p, false)}
-            onRemoveTag={(t) => toggleTag(t, false)}
-            tags={data.tags}
-          />
-        </div>
-      )}
-
       {/* Board */}
       <KanbanProvider
         columns={displayColumns}
@@ -402,7 +403,11 @@ export function KanbanBoard({
         onEditItem={openEdit}
         renderOverlay={(task) => (
           <KanbanCard id={task.id} isOverlay item={task}>
-            <TaskCardContent tags={data.tags} task={task} />
+            <TaskCardContent
+              tags={data.tags}
+              task={task}
+              teamMembers={data.teamMembers}
+            />
           </KanbanCard>
         )}
       >
@@ -434,6 +439,7 @@ export function KanbanBoard({
                     onEdit={openEdit}
                     tags={data.tags}
                     task={task}
+                    teamMembers={data.teamMembers}
                   />
                 </KanbanCard>
               )}

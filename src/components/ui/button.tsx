@@ -33,13 +33,14 @@ const buttonVariants = cva(
         ],
         ghost: [
           "bg-transparent text-[color:var(--color-foreground)]",
-          "hover:not-data-[disabled]:bg-[color:oklch(from_var(--color-accent)_l_c_h_/_0.6)]",
+          "hover:not-data-[disabled]:not-data-[popup-open]:bg-[color:oklch(from_var(--color-accent)_l_c_h_/_0.6)]",
           "data-[popup-open]:bg-[color:oklch(from_var(--color-accent)_l_c_h_/_0.7)]",
         ],
         outline: [
           "bg-[var(--mix-card-50-bg)] text-[color:var(--color-foreground)]",
           "shadow-[0_0_0_1px_oklch(from_var(--color-border)_l_c_h_/_0.4)]",
-          "hover:not-data-[disabled]:bg-[var(--mix-card-66-bg)]",
+          "hover:not-data-[disabled]:not-data-[popup-open]:bg-[var(--mix-card-66-bg)]",
+          "data-[popup-open]:bg-[var(--mix-card-66-bg)]",
         ],
         link: [
           "bg-transparent p-0 text-[color:var(--color-muted-foreground)] no-underline",

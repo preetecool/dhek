@@ -111,7 +111,6 @@ function ComboboxPopup({
       data-slot="combobox-popup"
       {...props}
     >
-      <div style={{ height: "4px", width: "100%", flexShrink: 0 }} />
       {children}
       <div style={{ height: "4px", width: "100%", flexShrink: 0 }} />
     </Combobox.Popup>
@@ -163,7 +162,7 @@ function ComboboxItem({
         "px-2 pr-1.5 font-normal text-foreground text-xs leading-[1.2]",
         "before:absolute before:inset-0 before:-z-10 before:rounded-[calc(var(--radius)-4px)] before:bg-transparent before:content-['']",
         "hover:before:bg-[var(--accent)] focus:outline-none focus:before:bg-[var(--accent)] focus-visible:outline-none",
-        "data-[highlighted]:before:bg-[var(--accent)] data-[selected]:before:bg-[oklch(from_var(--accent)_l_c_h_/_0.33)]",
+        "data-[highlighted]:before:bg-[var(--accent)]",
         "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[disabled]:hover:before:bg-transparent",
         "max-sm:min-h-[2.75rem] max-sm:gap-3 max-sm:px-3 max-sm:py-2.5 max-sm:text-[0.9375rem]",
         className

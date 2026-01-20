@@ -60,7 +60,7 @@ export function filterTasks(tasks: Task[], filters: FilterConfig): Task[] {
     }
     if (filters.tags.length > 0) {
       const hasMatchingTag = filters.tags.some((tag) =>
-        task.tags.includes(tag)
+        task.tagIds.includes(tag)
       );
       if (!hasMatchingTag) {
         return false;
@@ -92,8 +92,8 @@ export function getTasksForGroup<T extends KanbanItemProps>(
     filtered = items.filter((item) => item.priority === groupId);
   } else {
     filtered = items.filter((item) => {
-      const tags = (item as unknown as { tags?: string[] }).tags;
-      return tags?.includes(groupId) ?? false;
+      const tagIds = (item as unknown as { tagIds?: string[] }).tagIds;
+      return tagIds?.includes(groupId) ?? false;
     });
   }
   return sortItemsByPriority(filtered);
@@ -102,7 +102,7 @@ export function getTasksForGroup<T extends KanbanItemProps>(
 export function getTagColumns(tasks: Task[], tags: Tag[]): Column[] {
   const tagSet = new Set<string>();
   for (const task of tasks) {
-    for (const tag of task.tags) {
+    for (const tag of task.tagIds) {
       tagSet.add(tag);
     }
   }

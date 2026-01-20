@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { showCopiedToast } from "@/components/ui/toast";
 
 interface PageHeaderProps {
-  name: string;
+  name?: string;
   onNameChange: (name: string) => void;
   shareUrl: string;
   defaultName?: string;
